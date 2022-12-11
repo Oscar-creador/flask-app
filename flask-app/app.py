@@ -4,7 +4,7 @@ from datetime import datetime
 
 from config import DevelopmentConfig
 from models import db
-from models import Alumno, Maestro, Grupo, Grupo_Alumno, Inasistencia, TimeSlot
+from models import Alumno, Maestro, Grupo, Grupo_Alumno, Inasistencia, TimeSlot, ClasesActivas, AlumnosClaseActiva
 import forms
 
 app = Flask(__name__)
@@ -71,17 +71,67 @@ def insertFalta():
     return "done"
 
 
+"""AQUI EMPIEZA LO DEL BACKEND----------------------------------------------"""
+
+@app.route('/recibirRequest',  methods=['GET', 'POST'])
+def recibirRequest():
+    args = request.args
+    rfid = args.get("rfid")
+    dia = args.get("dia")
+    hora = args.get("hora")
+    macAddress = args.get("mac")
+    imgBase64 = args.get("img64")
+
+    maestro = Maestro.query.filter_by(rfid=rfid).first()
+
+    if maestro is not None:
+        time_slot = TimeSlot.query.filter_by(dia=dia, hora=hora, maestro=maestro.maestro_id)
+        if time_slot is not None:
+            claseActiva = ClasesActivas.query.filter_by(macAddress = macAddress)
+            if claseActiva is None:
+                """abrir la tabla temporal de los alumnos (una lista o lo que sea) esa lista su llave deberia ser el grupo_id o la mac address de la esp."""
+                claseActiva = ClasesActivas(macAddress=macAddress, maestro_id=maestro.maestro_id, activa=True)
+                db.session.add(claseActiva)
+                db.session.commit()
+            else:
+                grupo_alumnos = Grupo_Alumno.query.filter_by(grupo_id=time_slot.grupo_id)
+                for alumno in grupo_alumnos:
+                    alumnoClaseActiva = AlumnosClaseActiva.query.filter_by(matricula = alumno.matricula)
+                    if alumnoClaseActiva is None:
+                        datee = datetime.now()
+                        falta = Inasistencia(matricula=alumno.matricula, grupo_id=time_slot.grupo_id, fecha_hora = datee)
+                        db.session.add(falta)
+                        db.session.commit()
+                    else:
+                        """borrar el registro del alumno en la tabla  AlumnosClaseActiva para no llenar la base de datos"""
+                        AlumnosClaseActiva.query.filter_by(matricula=alumno.matricula).delete()
+                        db.session.commit()
+                """borrar el registro de la mac address en la tabla ClasesActivas"""   
+                ClasesActivas.query.filter_by(macAddress=macAddress).delete()
+                db.session.commit()
+
+        else:
+            "No tienes clase a esta hora profesor"  
+    else:
+        alumno = Alumno.query.filter_by(rfid=rfid).first()
+        grupo_alumnos = Grupo_Alumno.query.filter_by(matricula=alumno.matricula)
+        for grupo_alumno in grupo_alumnos:
+            time_slot = TimeSlot.query.filter_by(dia=dia, hora=hora, grupo_id=grupo_alumno.grupo_id)
+            if time_slot is not None:
+                claseActiva = ClasesActivas.query.filter_by(macAddress = macAddress)
+                if claseActiva is not None:
+                    """convertir imgBase64 a imagen y enviar a telegramAlumno"""
+                    telegramAlumno = alumno.telegram_id
+                    """poner la asistencia temporal del alumno"""
+                    alumnoClaseActiva = AlumnosClaseActiva(macAddress=macAddress, matricula=alumno.matricula)
+                    db.session.add(alumnoClaseActiva)
+                    db.session.commit()
+            else:
+                return "No tienes clases a esta hora alumno"
+             
+    return 200
 
 
 
-
-
-
-
-if __name__ == "__main__":
-    db.init_app(app)
-    with app.app_context():
-        db.create_all()
-    app.run(port="5049")
 
 

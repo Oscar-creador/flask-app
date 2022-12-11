@@ -76,7 +76,29 @@ class TimeSlot(db.Model):
 
 
 
+class ClasesActivas(db.Model):
+    __tablename__ = 'clasesActivas'
+
+
+    macAddress = db.Column(db.String(30), primary_key=True)
+    grupo_id = db.Column(db.String(12))
+    maestro_id = db.Column(db.Integer)
+    activa = db.Column(db.Boolean)
+
+
 
     
+class AlumnosClaseActiva(db.Model):
+    __tablename__ = 'alumnosClaseActiva'
+
+
+    macAddress = db.Column(db.String(30))
+    matricula = db.Column(db.Integer, primary_key=True)
+    claseActiva = db.relationship('ClasesActivas')
+
+    __table_args__ = (ForeignKeyConstraint([macAddress], [ClasesActivas.macAddress]),)
+
+
+   
 
      
